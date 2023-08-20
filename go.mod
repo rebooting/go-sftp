@@ -1,4 +1,4 @@
-module github.com/moov-io/go-sftp
+module github.com/rebooting/go-sftp
 
 go 1.19
 

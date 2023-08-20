@@ -11,12 +11,14 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/magisterquis/connectproxy"
 	"github.com/moov-io/base/log"
 	"github.com/moov-io/go-sftp/pkg/sshx"
 
@@ -25,6 +27,7 @@ import (
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/net/proxy"
 )
 
 var (
@@ -190,13 +193,39 @@ func sftpConnect(logger log.Logger, cfg ClientConfig) (*ssh.Client, io.WriteClos
 	// Connect to the remote server
 	var client *ssh.Client
 	var err error
+
+	// check if http_proxy environment variable is set
+	proxyURL, err := url.Parse(os.Getenv("http_proxy"))
+	if err != nil {
+		proxyURL = nil
+	}
+
 	for i := 0; i < 3; i++ {
 		if client == nil {
 			if i > 0 {
 				sftpConnectionRetries.With("hostname", cfg.Hostname).Add(1)
 			}
-			client, err = ssh.Dial("tcp", cfg.Hostname, conf) // retry connection
+
+			if proxyURL != nil {
+				connectProxy, err := connectproxy.New(proxyURL, proxy.Direct)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("sftpConnect: failed to create proxy dialer: %w", err)
+				}
+				proxySSHconn, err := connectProxy.Dial("tcp", cfg.Hostname)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("sftpConnect: failed to dial remote SFTP via proxy: %w", err)
+				}
+				c, chans, reqs, err := ssh.NewClientConn(proxySSHconn, cfg.Hostname, conf)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("sftpConnect: failed to create new client connection: %w", err)
+				}
+
+				client = ssh.NewClient(c, chans, reqs)
+			} else {
+				client, err = ssh.Dial("tcp", cfg.Hostname, conf) // retry connection
+			}
 			time.Sleep(250 * time.Millisecond)
+
 		}
 	}
 	if client == nil && err != nil {

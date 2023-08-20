@@ -197,7 +197,6 @@ func sftpConnect(logger log.Logger, cfg ClientConfig) (*ssh.Client, io.WriteClos
 	// check if http_proxy environment variable is set
 	proxyURL, err := url.Parse(os.Getenv("http_proxy"))
 	if err != nil {
-		logger.Warn().Logf("sftpConnect: failed to parse http_proxy environment variable %s", err)
 		proxyURL = nil
 	}
 
@@ -208,7 +207,6 @@ func sftpConnect(logger log.Logger, cfg ClientConfig) (*ssh.Client, io.WriteClos
 			}
 
 			if proxyURL != nil {
-				logger.Debug().Logf("sftpConnect: connecting to Proxy %v", proxyURL)
 				connectProxy, err := connectproxy.New(proxyURL, proxy.Direct)
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("sftpConnect: failed to create proxy dialer: %w", err)
@@ -217,7 +215,6 @@ func sftpConnect(logger log.Logger, cfg ClientConfig) (*ssh.Client, io.WriteClos
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("sftpConnect: failed to dial remote SFTP via proxy: %w", err)
 				}
-				logger.Debug().Logf("sftpConnect: connected to %v via proxy", cfg.Hostname)
 				c, chans, reqs, err := ssh.NewClientConn(proxySSHconn, cfg.Hostname, conf)
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("sftpConnect: failed to create new client connection: %w", err)
